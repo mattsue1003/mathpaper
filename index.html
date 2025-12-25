@@ -1,0 +1,327 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Printer, Settings, RefreshCcw, FileText, CheckCircle, Plus, Minus, X, Divide } from 'lucide-react';
+
+const MathGenerator = () => {
+  // 設定狀態
+  const [config, setConfig] = useState({
+    difficulty: 'easy', // easy, medium, hard
+    problemCount: 20,   // 每頁題目數
+    includeAnswers: true, // 是否包含答案頁
+    numberOfSets: 1,    // 產生幾份不同的試卷
+    operators: {
+      add: true,
+      sub: true,
+      mul: false,
+      div: false
+    }
+  });
+
+  const [generatedSheets, setGeneratedSheets] = useState([]);
+  const printRef = useRef();
+
+  // 難度設定對應表
+  const difficultySettings = {
+    easy: { min: 1, max: 20, label: '簡單 (20以內加減)', allowMulDiv: false },
+    medium: { min: 10, max: 99, label: '中等 (兩位數加減)', allowMulDiv: false },
+    hard: { min: 10, max: 999, label: '挑戰 (三位數與乘除)', allowMulDiv: true }
+  };
+
+  // 亂數產生器
+  const getRandomInt = (min, max) => {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  };
+
+  // 產生單一題目
+  const generateProblem = (mode) => {
+    let num1, num2, operator, answer, symbol;
+    
+    // 決定運算符號
+    const activeOps = [];
+    if (config.operators.add) activeOps.push('add');
+    if (config.operators.sub) activeOps.push('sub');
+    if (mode === 'hard' && config.operators.mul) activeOps.push('mul');
+    if (mode === 'hard' && config.operators.div) activeOps.push('div');
+
+    // 如果沒有選任何運算符號，預設為加法
+    const op = activeOps.length > 0 
+      ? activeOps[getRandomInt(0, activeOps.length - 1)] 
+      : 'add';
+
+    const range = difficultySettings[mode];
+
+    switch (op) {
+      case 'add':
+        symbol = '+';
+        num1 = getRandomInt(range.min, range.max);
+        num2 = getRandomInt(range.min, range.max);
+        answer = num1 + num2;
+        break;
+      case 'sub':
+        symbol = '-';
+        num1 = getRandomInt(range.min, range.max);
+        num2 = getRandomInt(range.min, num1); // 確保不出現負數
+        answer = num1 - num2;
+        break;
+      case 'mul':
+        symbol = '×';
+        // 乘法為了避免數字太大，我們限制乘數較小
+        num1 = getRandomInt(2, 20); 
+        num2 = getRandomInt(2, 9);
+        answer = num1 * num2;
+        break;
+      case 'div':
+        symbol = '÷';
+        // 除法邏輯：先決定答案和除數，反推被除數，確保整除
+        answer = getRandomInt(2, 12);
+        num2 = getRandomInt(2, 9);
+        num1 = answer * num2;
+        break;
+      default:
+        symbol = '+';
+        num1 = 1; num2 = 1; answer = 2;
+    }
+
+    return { num1, num2, symbol, answer };
+  };
+
+  // 產生所有試卷
+  const generateSheets = () => {
+    const newSheets = [];
+    
+    for (let i = 0; i < config.numberOfSets; i++) {
+      const problems = [];
+      for (let j = 0; j < config.problemCount; j++) {
+        problems.push(generateProblem(config.difficulty));
+      }
+      
+      const sheetId = `S-${Date.now().toString().slice(-4)}-${i+1}`;
+      newSheets.push({
+        id: sheetId,
+        index: i + 1,
+        problems: problems,
+        date: new Date().toLocaleDateString('zh-TW')
+      });
+    }
+    setGeneratedSheets(newSheets);
+  };
+
+  // 初始載入時產生一次
+  useEffect(() => {
+    generateSheets();
+  }, []);
+
+  // 處理列印
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // 難度變更處理
+  const handleDifficultyChange = (e) => {
+    const diff = e.target.value;
+    setConfig(prev => ({
+      ...prev,
+      difficulty: diff,
+      // 如果切換到非 hard，強制關閉乘除
+      operators: {
+        ...prev.operators,
+        mul: diff === 'hard' ? prev.operators.mul : false,
+        div: diff === 'hard' ? prev.operators.div : false,
+      }
+    }));
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 font-sans text-gray-800">
+      {/* --- 控制面板 (列印時隱藏) --- */}
+      <div className="print:hidden bg-white shadow-md p-6 sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+            <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-2">
+              <FileText className="w-8 h-8" />
+              樂齡腦力激盪 - 數學題目產生器
+            </h1>
+            <button 
+              onClick={handlePrint}
+              className="mt-4 md:mt-0 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all"
+            >
+              <Printer className="w-5 h-5" />
+              列印題目 (A4)
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+            {/* 難度設定 */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-600 flex items-center gap-1">
+                <Settings className="w-4 h-4" /> 難度選擇
+              </label>
+              <select 
+                value={config.difficulty}
+                onChange={handleDifficultyChange}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="easy">簡單 (20以內加減)</option>
+                <option value="medium">中等 (兩位數加減)</option>
+                <option value="hard">挑戰 (含乘除法)</option>
+              </select>
+            </div>
+
+            {/* 題型選擇 */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-600">運算符號</label>
+              <div className="flex gap-2 flex-wrap">
+                <button 
+                  onClick={() => setConfig(p => ({...p, operators: {...p.operators, add: !p.operators.add}}))}
+                  className={`px-3 py-1 rounded border ${config.operators.add ? 'bg-blue-100 border-blue-500 text-blue-700' : 'bg-white border-gray-300 text-gray-400'}`}
+                >＋</button>
+                <button 
+                  onClick={() => setConfig(p => ({...p, operators: {...p.operators, sub: !p.operators.sub}}))}
+                  className={`px-3 py-1 rounded border ${config.operators.sub ? 'bg-blue-100 border-blue-500 text-blue-700' : 'bg-white border-gray-300 text-gray-400'}`}
+                >－</button>
+                {config.difficulty === 'hard' && (
+                  <>
+                    <button 
+                      onClick={() => setConfig(p => ({...p, operators: {...p.operators, mul: !p.operators.mul}}))}
+                      className={`px-3 py-1 rounded border ${config.operators.mul ? 'bg-blue-100 border-blue-500 text-blue-700' : 'bg-white border-gray-300 text-gray-400'}`}
+                    >×</button>
+                    <button 
+                      onClick={() => setConfig(p => ({...p, operators: {...p.operators, div: !p.operators.div}}))}
+                      className={`px-3 py-1 rounded border ${config.operators.div ? 'bg-blue-100 border-blue-500 text-blue-700' : 'bg-white border-gray-300 text-gray-400'}`}
+                    >÷</button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* 產生設定 */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-600">產生份數 (不同題目)</label>
+              <input 
+                type="number" 
+                min="1" 
+                max="20"
+                value={config.numberOfSets}
+                onChange={(e) => setConfig({...config, numberOfSets: parseInt(e.target.value) || 1})}
+                className="w-full p-2 border border-gray-300 rounded-md"
+              />
+            </div>
+
+            {/* 其他選項 */}
+            <div className="space-y-2 flex flex-col justify-end">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input 
+                  type="checkbox"
+                  checked={config.includeAnswers}
+                  onChange={(e) => setConfig({...config, includeAnswers: e.target.checked})}
+                  className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <span className="text-gray-700">產生答案頁</span>
+              </label>
+              
+              <button 
+                onClick={generateSheets}
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-md font-semibold flex items-center justify-center gap-2 shadow transition-colors"
+              >
+                <RefreshCcw className="w-4 h-4" /> 重新產生題目
+              </button>
+            </div>
+          </div>
+          <p className="mt-4 text-sm text-gray-500 bg-blue-50 p-2 rounded inline-block">
+            💡 提示：使用電腦瀏覽器按下「列印」或 Ctrl+P 即可獲得最佳 A4 效果。
+          </p>
+        </div>
+      </div>
+
+      {/* --- 列印區域 --- */}
+      <div id="printable-area" className="p-8 mx-auto max-w-[210mm] print:p-0 print:max-w-none">
+        
+        {/* 遍歷每一份試卷 */}
+        {generatedSheets.map((sheet, sIndex) => (
+          <React.Fragment key={sheet.id}>
+            
+            {/* 題目卷 */}
+            <div className="bg-white shadow-xl print:shadow-none p-10 min-h-[297mm] mb-8 print:mb-0 relative print:break-after-page mx-auto w-full box-border">
+              {/* 頁首 */}
+              <div className="border-b-2 border-gray-800 pb-4 mb-8 flex justify-between items-end">
+                <div>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">每日腦力體操</h2>
+                  <p className="text-lg text-gray-600">難度：{difficultySettings[config.difficulty].label.split(' ')[0]} | 試卷編號：{sheet.id}</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-xl mb-1">姓名：________________</div>
+                  <div className="text-lg text-gray-500">日期：{sheet.date} | 分數：________</div>
+                </div>
+              </div>
+
+              {/* 題目網格 */}
+              <div className="grid grid-cols-2 gap-x-12 gap-y-12">
+                {sheet.problems.map((prob, pIndex) => (
+                  <div key={pIndex} className="flex items-center text-3xl font-mono border-b border-gray-300 pb-2">
+                    <span className="w-8 text-gray-400 text-xl font-sans mr-2">{pIndex + 1}.</span>
+                    <div className="flex-1 flex justify-between items-center px-4 font-semibold text-gray-800">
+                      <span className="w-16 text-right">{prob.num1}</span>
+                      <span className="mx-4">{prob.symbol}</span>
+                      <span className="w-16 text-left">{prob.num2}</span>
+                      <span className="mx-2">=</span>
+                      <span className="flex-1"></span> {/* 空白讓長輩填寫 */}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 頁尾 */}
+              <div className="absolute bottom-10 left-0 w-full text-center text-gray-400 text-sm">
+                保持心情愉快，動動腦更有活力！ | 第 {sIndex + 1} 份，共 {config.numberOfSets} 份
+              </div>
+            </div>
+
+            {/* 答案卷 (如果有的話) */}
+            {config.includeAnswers && (
+              <div className="bg-white shadow-xl print:shadow-none p-10 min-h-[297mm] mb-8 print:mb-0 relative print:break-after-page mx-auto w-full box-border">
+                {/* 答案卷頁首 */}
+                <div className="border-b-2 border-gray-400 pb-2 mb-6 flex justify-between items-end">
+                  <h2 className="text-2xl font-bold text-gray-700">參考解答</h2>
+                  <p className="text-gray-500">試卷編號：{sheet.id}</p>
+                </div>
+
+                {/* 答案網格 (比較密集) */}
+                <div className="grid grid-cols-4 gap-6">
+                  {sheet.problems.map((prob, pIndex) => (
+                    <div key={pIndex} className="border border-gray-200 p-3 rounded bg-gray-50 flex flex-col items-center">
+                      <span className="text-xs text-gray-400 mb-1">第 {pIndex + 1} 題</span>
+                      <div className="text-lg font-mono text-gray-600">
+                        {prob.num1} {prob.symbol} {prob.num2}
+                      </div>
+                      <div className="text-2xl font-bold text-red-600 mt-1">
+                        = {prob.answer}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                 <div className="absolute bottom-10 left-0 w-full text-center text-gray-400 text-sm">
+                  解答頁 - 請在完成後再核對哦！
+                </div>
+              </div>
+            )}
+
+          </React.Fragment>
+        ))}
+      </div>
+
+      <style>{`
+        @media print {
+          @page {
+            size: A4;
+            margin: 10mm;
+          }
+          body {
+            background: white;
+            color: black;
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default MathGenerator;
