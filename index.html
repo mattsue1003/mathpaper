@@ -366,8 +366,8 @@
                                         className="absolute top-5 left-1/2 -translate-x-1/2 h-14 object-contain max-w-[200px]" 
                                     />
 
-                                    {/* 頁首：增加 margin-top 以避免 Logo 遮擋 */}
-                                    <div className="border-b-2 border-gray-800 pb-4 mb-8 mt-10 flex justify-between items-end">
+                                    {/* 頁首：移除 mt-10，恢復原本排版 */}
+                                    <div className="border-b-2 border-gray-800 pb-4 mb-8 flex justify-between items-end">
                                         <div>
                                             <h2 className="text-3xl font-bold text-gray-900 mb-2">每日腦力體操</h2>
                                             <p className="text-lg text-gray-600">難度：{difficultySettings[config.difficulty].label.split(' ')[0]} | 試卷編號：{sheet.id}</p>
@@ -411,8 +411,8 @@
                                             className="absolute top-5 left-1/2 -translate-x-1/2 h-14 object-contain max-w-[200px]" 
                                         />
 
-                                        {/* 答案卷頁首 */}
-                                        <div className="border-b-2 border-gray-400 pb-2 mb-6 mt-10 flex justify-between items-end">
+                                        {/* 答案卷頁首：移除 mt-10 */}
+                                        <div className="border-b-2 border-gray-400 pb-2 mb-6 flex justify-between items-end">
                                             <div>
                                                 <h2 className="text-2xl font-bold text-gray-700">參考解答</h2>
                                                 <p className="text-gray-500">試卷編號：{sheet.id}</p>
