@@ -48,7 +48,7 @@
         const { useState, useEffect, useRef } = React;
         
         // --- 設定預設圖片網址 ---
-        // 預設 Logo (更新為 Adlers Logo)
+        // 預設 Logo (Adlers Logo)
         const DEFAULT_LOGO_URL = "https://adlers.tw/wp-content/uploads/2021/01/%E6%9C%AA%E5%91%BD%E5%90%8D-3_%E5%B7%A5%E4%BD%9C%E5%8D%80%E5%9F%9F-1-1.png";
         // 設計者照片
         const DESIGNER_IMG_URL = "https://scontent.ftpe7-4.fna.fbcdn.net/v/t39.30808-6/504017196_1312157197585884_2666464946863199959_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=m30xFTgOzOAQ7kNvwFH3QzL&_nc_oc=Adn3W9VZculBierHfF_7R9PXKhMHZO-D7bUAaFGTVHse2XhAt5wxukHQp8Xv4uNf37E&_nc_zt=23&_nc_ht=scontent.ftpe7-4.fna&_nc_gid=84_HD62j0UJn3n4ZfCvQag&oh=00_AfnlBt8VQKebztsfOVifzYuVG2fpMKjXYeI7WkY6yT1H1g&oe=69547C8B";
@@ -340,6 +340,10 @@
                                 
                                 {/* 題目卷 */}
                                 <div className="bg-white shadow-xl print:shadow-none p-10 min-h-[297mm] mb-8 print:mb-0 relative break-after-page mx-auto w-full box-border">
+                                    
+                                    {/* 📌 修改重點：Logo 改為絕對定位，浮在右上角，完全不佔空間，不影響原本排版 */}
+                                    <img src={logoUrl} alt="Logo" className="absolute top-6 right-8 h-16 object-contain max-w-[200px]" />
+
                                     {/* 頁首 */}
                                     <div className="border-b-2 border-gray-800 pb-4 mb-8 flex justify-between items-end">
                                         <div>
@@ -347,8 +351,7 @@
                                             <p className="text-lg text-gray-600">難度：{difficultySettings[config.difficulty].label.split(' ')[0]} | 試卷編號：{sheet.id}</p>
                                         </div>
                                         <div className="text-right flex flex-col items-end">
-                                            {/* 列印頁 Logo：右上角 (動態連結) */}
-                                            <img src={logoUrl} alt="Logo" className="h-14 mb-2 object-contain max-w-[200px]" />
+                                            {/* 原本這裡的 Logo 已經移除，以避免推擠文字 */}
                                             <div className="text-xl mb-1">姓名：________________</div>
                                             <div className="text-lg text-gray-500">日期：{sheet.date} | 分數：________</div>
                                         </div>
@@ -379,16 +382,17 @@
                                 {/* 答案卷 (如果有的話) */}
                                 {config.includeAnswers && (
                                     <div className="bg-white shadow-xl print:shadow-none p-10 min-h-[297mm] mb-8 print:mb-0 relative break-after-page mx-auto w-full box-border">
+                                        
+                                        {/* 📌 解答頁 Logo 也改為絕對定位 */}
+                                        <img src={logoUrl} alt="Logo" className="absolute top-6 right-8 h-12 object-contain max-w-[150px]" />
+
                                         {/* 答案卷頁首 */}
                                         <div className="border-b-2 border-gray-400 pb-2 mb-6 flex justify-between items-end">
                                             <div>
                                                 <h2 className="text-2xl font-bold text-gray-700">參考解答</h2>
                                                 <p className="text-gray-500">試卷編號：{sheet.id}</p>
                                             </div>
-                                            <div className="text-right">
-                                                 {/* 解答頁 Logo：右上角 (動態連結) */}
-                                                <img src={logoUrl} alt="Logo" className="h-12 object-contain max-w-[150px]" />
-                                            </div>
+                                            {/* 原本右側的 Logo 區塊已移除 */}
                                         </div>
 
                                         {/* 答案網格 (比較密集) */}
