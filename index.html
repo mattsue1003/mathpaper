@@ -66,6 +66,9 @@
         const IconImage = () => (
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
         );
+        const IconDownload = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        );
         
         // --- 主程式 ---
         const MathGenerator = () => {
@@ -191,6 +194,12 @@
                 window.print();
             };
 
+            // 處理下載 PDF
+            const handleDownloadPDF = () => {
+                alert("💡 下載教學：\n\n網頁會開啟列印視窗，請在「目的地」或「印表機」選單中，選擇『另存為 PDF』即可將檔案下載到電腦中！");
+                window.print();
+            };
+
             // 難度變更處理
             const handleDifficultyChange = (e) => {
                 const diff = e.target.value;
@@ -211,19 +220,28 @@
                     {/* --- 控制面板 (列印時隱藏) --- */}
                     <div className="no-print bg-white shadow-md p-6 sticky top-0 z-10">
                         <div className="max-w-6xl mx-auto">
-                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                                 <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-3">
                                     {/* Logo 在網頁標題 */}
                                     <img src={logoUrl} alt="Logo" className="h-10 object-contain max-w-[150px]" />
                                     樂齡腦力激盪 - 數學題目產生器
                                 </h1>
-                                <button 
-                                    onClick={handlePrint}
-                                    className="mt-4 md:mt-0 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all"
-                                >
-                                    <IconPrinter />
-                                    列印題目 (A4)
-                                </button>
+                                <div className="flex gap-2">
+                                     <button 
+                                        onClick={handleDownloadPDF}
+                                        className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all"
+                                    >
+                                        <IconDownload />
+                                        下載 PDF
+                                    </button>
+                                    <button 
+                                        onClick={handlePrint}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all"
+                                    >
+                                        <IconPrinter />
+                                        列印題目
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
@@ -326,7 +344,7 @@
                                 </div>
                             </div>
                             <p className="mt-4 text-sm text-gray-500 bg-blue-50 p-2 rounded inline-block">
-                                💡 提示：使用電腦瀏覽器按下「列印」或 Ctrl+P 即可獲得最佳 A4 效果。
+                                💡 提示：點擊「下載 PDF」後，在目的地選擇「另存為 PDF」即可儲存檔案。
                             </p>
                         </div>
                     </div>
@@ -341,17 +359,20 @@
                                 {/* 題目卷 */}
                                 <div className="bg-white shadow-xl print:shadow-none p-10 min-h-[297mm] mb-8 print:mb-0 relative break-after-page mx-auto w-full box-border">
                                     
-                                    {/* 📌 修改重點：Logo 改為絕對定位，浮在右上角，完全不佔空間，不影響原本排版 */}
-                                    <img src={logoUrl} alt="Logo" className="absolute top-6 right-8 h-16 object-contain max-w-[200px]" />
+                                    {/* 📌 修改重點：Logo 移至上方中央，並縮小至 h-14 (約原本的 90%) */}
+                                    <img 
+                                        src={logoUrl} 
+                                        alt="Logo" 
+                                        className="absolute top-5 left-1/2 -translate-x-1/2 h-14 object-contain max-w-[200px]" 
+                                    />
 
-                                    {/* 頁首 */}
-                                    <div className="border-b-2 border-gray-800 pb-4 mb-8 flex justify-between items-end">
+                                    {/* 頁首：增加 margin-top 以避免 Logo 遮擋 */}
+                                    <div className="border-b-2 border-gray-800 pb-4 mb-8 mt-10 flex justify-between items-end">
                                         <div>
                                             <h2 className="text-3xl font-bold text-gray-900 mb-2">每日腦力體操</h2>
                                             <p className="text-lg text-gray-600">難度：{difficultySettings[config.difficulty].label.split(' ')[0]} | 試卷編號：{sheet.id}</p>
                                         </div>
                                         <div className="text-right flex flex-col items-end">
-                                            {/* 原本這裡的 Logo 已經移除，以避免推擠文字 */}
                                             <div className="text-xl mb-1">姓名：________________</div>
                                             <div className="text-lg text-gray-500">日期：{sheet.date} | 分數：________</div>
                                         </div>
@@ -383,16 +404,19 @@
                                 {config.includeAnswers && (
                                     <div className="bg-white shadow-xl print:shadow-none p-10 min-h-[297mm] mb-8 print:mb-0 relative break-after-page mx-auto w-full box-border">
                                         
-                                        {/* 📌 解答頁 Logo 也改為絕對定位 */}
-                                        <img src={logoUrl} alt="Logo" className="absolute top-6 right-8 h-12 object-contain max-w-[150px]" />
+                                        {/* 📌 解答頁 Logo 也比照辦理 */}
+                                        <img 
+                                            src={logoUrl} 
+                                            alt="Logo" 
+                                            className="absolute top-5 left-1/2 -translate-x-1/2 h-14 object-contain max-w-[200px]" 
+                                        />
 
                                         {/* 答案卷頁首 */}
-                                        <div className="border-b-2 border-gray-400 pb-2 mb-6 flex justify-between items-end">
+                                        <div className="border-b-2 border-gray-400 pb-2 mb-6 mt-10 flex justify-between items-end">
                                             <div>
                                                 <h2 className="text-2xl font-bold text-gray-700">參考解答</h2>
                                                 <p className="text-gray-500">試卷編號：{sheet.id}</p>
                                             </div>
-                                            {/* 原本右側的 Logo 區塊已移除 */}
                                         </div>
 
                                         {/* 答案網格 (比較密集) */}
