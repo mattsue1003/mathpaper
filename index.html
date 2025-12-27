@@ -100,8 +100,8 @@
         .page-container { 
             width: 210mm; 
             margin: 0 auto; 
-            /* 在手機上若畫面不夠寬，允許水平捲動，但不影響 PDF 生成 */
-            overflow-x: auto; 
+            /* 讓手機預覽時可以左右滑動，但不影響列印 */
+            overflow-x: auto;
         }
         
         .sheet {
@@ -110,33 +110,14 @@
             height: 297mm; 
             padding: 15mm 20mm; 
             box-sizing: border-box;
-            margin-bottom: 30px; 
+            margin-bottom: 30px; /* 螢幕預覽時的間距 */
             box-shadow: 0 0 15px rgba(0,0,0,0.15); 
             display: flex; 
             flex-direction: column; 
-            position: relative; 
+            position: relative;
             overflow: hidden; 
-            /* 關鍵：防止手機瀏覽器因為容器過寬而擠壓內容 */
+            /* 確保最小寬度，防止手機預覽時內容擠壓 */
             min-width: 210mm; 
-        }
-
-        /* 專門為了 html2pdf 生成時使用的樣式，消除陰影和間距 */
-        body.generating-pdf {
-            /* 轉檔時強制寬度，防止手機版面跑掉 */
-            width: 210mm !important;
-            overflow: hidden !important;
-        }
-
-        body.generating-pdf .page-container {
-            width: 210mm !important;
-            margin: 0 !important;
-            overflow: visible !important;
-        }
-
-        body.generating-pdf .sheet {
-            box-shadow: none;
-            margin: 0;
-            /* 確保轉檔時不會有邊距干擾 */
         }
 
         /* Logo 樣式 */
@@ -236,13 +217,22 @@
             z-index: 1;
         }
 
+        /* --- PDF轉檔專用樣式 (透過JS動態添加) --- */
+        .pdf-export-mode .sheet {
+            box-shadow: none !important;
+            margin-bottom: 0 !important;
+            margin-top: 0 !important;
+            /* 強制頁面斷點 */
+            page-break-after: always;
+        }
+
         /* --- 列印專用樣式 --- */
         @media print {
             @page { margin: 0; size: A4 portrait; } 
             body { background: white; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .controls { display: none; }
             .sheet { box-shadow: none; margin: 0; page-break-after: always; height: 297mm; width: 210mm; break-inside: avoid; }
-            .page-container { width: 100%; margin: 0; }
+            .page-container { width: 100%; margin: 0; overflow: visible; }
             .answer-box { border: 2px solid #333 !important; }
             .answer-filled { border-color: #d32f2f !important; color: #d32f2f !important; }
             .sheet-logo { display: block !important; } 
@@ -477,6 +467,7 @@
         const div = document.createElement('div');
         div.className = 'sheet';
         
+        // 生成 Logo HTML
         let logoHtml = '';
         if (currentLogoData) {
             logoHtml = `<img src="${currentLogoData}" class="sheet-logo" style="width: ${logoSize}px" alt="Logo">`;
@@ -513,7 +504,8 @@
         return div;
     }
 
-    // --- 修正版 PDF 下載函式 ---
+    // --- 終極修正版：背景複製轉檔函式 ---
+    // 不會干擾目前畫面，且強制 A4 寬度，解決手機裁切與跳頁問題
     function downloadPDF() {
         const element = document.getElementById('outputArea');
         const btn = document.getElementById('pdfBtn');
@@ -522,34 +514,49 @@
         
         btn.innerText = "⏳ 處理中...請稍候";
         btn.disabled = true;
-        
-        document.body.classList.add('generating-pdf');
 
+        // 1. 建立一個專門用於轉檔的容器 (Off-screen Container)
+        const container = document.createElement('div');
+        // 強制設定寬度為 A4 寬度 (約 210mm)，避免手機螢幕寬度影響
+        container.style.width = '210mm'; 
+        container.style.position = 'absolute'; 
+        container.style.top = '-10000px'; 
+        container.style.left = '0px'; 
+        container.style.zIndex = '-1000';
+        // 加上特定 class 以便 CSS 強制移除陰影和邊距
+        container.classList.add('pdf-export-mode');
+
+        // 2. 複製內容到容器中
+        const clone = element.cloneNode(true);
+        container.appendChild(clone);
+        document.body.appendChild(container);
+
+        // 3. 設定 html2pdf 參數
         const opt = {
-            margin:       0, 
+            margin:       0, // 重要：歸零邊距，避免內容被推擠
             filename:     title + '.pdf',
             image:        { type: 'jpeg', quality: 0.98 },
-            // 關鍵修正：設定 windowWidth，騙過 html2canvas 讓它以為螢幕很寬
             html2canvas:  { 
-                scale: 2, 
-                useCORS: true, 
-                scrollX: 0, 
-                scrollY: 0,
-                windowWidth: 1200 // 強制設定虛擬視窗寬度
+                scale: 2,       // 高解析度
+                useCORS: true,  // 跨域圖片支援
+                scrollY: 0,     // 鎖定頂部
+                scrollX: 0,
+                windowWidth: 800 // 騙過瀏覽器，假裝視窗有 800px 寬
             },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
-        html2pdf().set(opt).from(element).save().then(() => {
+        // 4. 對「複製品」進行轉檔，完成後移除
+        html2pdf().set(opt).from(clone).save().then(() => {
+            document.body.removeChild(container);
             btn.innerText = originalText;
             btn.disabled = false;
-            document.body.classList.remove('generating-pdf');
         }).catch(err => {
             console.error(err);
-            alert("轉檔發生錯誤，請改用「列印 -> 存成 PDF」功能");
+            if (document.body.contains(container)) document.body.removeChild(container);
             btn.innerText = originalText;
             btn.disabled = false;
-            document.body.classList.remove('generating-pdf');
+            alert("轉檔發生錯誤，建議使用電腦操作");
         });
     }
 
