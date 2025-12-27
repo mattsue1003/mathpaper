@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>樂齡大腦體操 - 題目產生器 Pro (20題版)</title>
+    
+    <!-- 引入 html2pdf 函式庫，用於直接下載 PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
     <style>
         /* --- 基礎設定 --- */
         body { 
@@ -72,20 +76,25 @@
             box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.1);
         }
         
-        .btn-group { grid-column: 1 / -1; display: flex; gap: 15px; margin-top: 15px; }
+        .btn-group { grid-column: 1 / -1; display: flex; gap: 15px; margin-top: 15px; flex-wrap: wrap; }
         
         button {
-            flex: 1; padding: 15px; border: none; border-radius: 8px; 
+            flex: 1; min-width: 200px; padding: 15px; border: none; border-radius: 8px; 
             font-size: 18px; font-weight: bold; cursor: pointer; 
             transition: transform 0.1s, box-shadow 0.2s;
         }
         button:active { transform: scale(0.98); }
+        button:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
         
         .gen-btn { background: #27ae60; color: white; box-shadow: 0 4px 0 #219150; }
         .gen-btn:hover { background: #2ecc71; }
         
         .print-btn { background: #34495e; color: white; box-shadow: 0 4px 0 #2c3e50; }
         .print-btn:hover { background: #4b6584; }
+
+        /* 新增的手機下載按鈕樣式 */
+        .pdf-btn { background: #e67e22; color: white; box-shadow: 0 4px 0 #d35400; }
+        .pdf-btn:hover { background: #f39c12; }
 
         /* --- A4 紙張預覽樣式 --- */
         .page-container { width: 210mm; margin: 0 auto; }
@@ -102,6 +111,13 @@
             flex-direction: column; 
             position: relative; /* 讓絕對定位的 Logo 參考此容器 */
             overflow: hidden; /* 避免 Logo 超出紙張 */
+        }
+
+        /* 專門為了 html2pdf 生成時使用的樣式，消除陰影和間距 */
+        body.generating-pdf .sheet {
+            box-shadow: none;
+            margin-bottom: 0;
+            margin-top: 0;
         }
 
         /* Logo 樣式 */
@@ -283,7 +299,8 @@
     
     <div class="btn-group">
         <button class="gen-btn" onclick="generateSheets()">✨ 重新生成題目</button>
-        <button class="print-btn" onclick="window.print()">🖨️ 列印 / 存成 PDF</button>
+        <button class="print-btn" onclick="window.print()">🖨️ 列印 / 電腦存 PDF</button>
+        <button class="pdf-btn" id="pdfBtn" onclick="downloadPDF()">📱 下載 PDF (手機用)</button>
     </div>
 </div>
 
@@ -480,6 +497,44 @@
             </div>
         `;
         return div;
+    }
+
+    // --- 新增：處理 PDF 下載的函式 ---
+    function downloadPDF() {
+        const element = document.getElementById('outputArea');
+        const btn = document.getElementById('pdfBtn');
+        const originalText = btn.innerText;
+        const title = document.getElementById('titleInput').value;
+        
+        // 變更按鈕狀態
+        btn.innerText = "⏳ 處理中...請稍候";
+        btn.disabled = true;
+        
+        // 加上特殊 class 以修正轉檔時的樣式 (去除陰影等)
+        document.body.classList.add('generating-pdf');
+
+        const opt = {
+            margin:       0, // 邊距設為0，因為 .sheet 已經設定好 padding
+            filename:     title + '.pdf',
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true }, // scale: 2 讓字體更清晰
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            // pagebreak: { mode: 'css', after: '.sheet' } // 確保每一張考卷分頁
+        };
+
+        // 執行轉換
+        html2pdf().set(opt).from(element).save().then(() => {
+            // 恢復按鈕狀態
+            btn.innerText = originalText;
+            btn.disabled = false;
+            document.body.classList.remove('generating-pdf');
+        }).catch(err => {
+            console.error(err);
+            alert("轉檔發生錯誤，請改用「列印 -> 存成 PDF」功能");
+            btn.innerText = originalText;
+            btn.disabled = false;
+            document.body.classList.remove('generating-pdf');
+        });
     }
 
     window.onload = generateSheets;
