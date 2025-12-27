@@ -15,11 +15,14 @@
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
+    <!-- 引入 html2pdf.js 用於產生 PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
     <style>
         @media print {
             @page {
                 size: A4;
-                margin: 10mm;
+                margin: 0;
             }
             body {
                 background: white;
@@ -32,6 +35,15 @@
             }
             .break-after-page {
                 page-break-after: always;
+                break-after: page;
+            }
+            /* 列印時隱藏捲軸並重設寬度 */
+            .print-reset-width {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                padding: 0 !important;
+                overflow: visible !important;
             }
         }
         /* 確保螢幕顯示時有適當的字體 */
@@ -48,8 +60,9 @@
         const { useState, useEffect, useRef } = React;
         
         // --- 設定預設圖片網址 ---
-        // 預設 Logo (Adlers Logo)
-        const DEFAULT_LOGO_URL = "https://adlers.tw/wp-content/uploads/2021/01/%E6%9C%AA%E5%91%BD%E5%90%8D-3_%E5%B7%A5%E4%BD%9C%E5%8D%80%E5%9F%9F-1-1.png";
+        // 為了避免 CORS 跨域問題導致 PDF 產生失敗，將預設 Logo 改為 Base64 SVG (顯示 Adlers 文字)
+        const DEFAULT_LOGO_URL = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScxNTAnIGhlaWdodD0nNTAnIHZpZXdCb3g9JzAgMCAxNTAgNTAnPjx0ZXh0IHg9JzUwJScgeT0nNTAlJyBkb21pbmFudC1iYXNlbGluZT0nbWlkZGxlJyB0ZXh0LWFuY2hvcj0nbWlkZGxlJyBmb250LWZhbWlseT0nc2Fucy1zZXJpZicgZm9udC13ZWlnaHQ9J2JvbGQnIGZvbnQtc2l6ZT0nMzAnIGZpbGw9JyMyNTYzRUInPkFkbGVyczwvdGV4dD48L3N2Zz4=";
+        
         // 設計者照片
         const DESIGNER_IMG_URL = "https://scontent.ftpe7-4.fna.fbcdn.net/v/t39.30808-6/504017196_1312157197585884_2666464946863199959_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=m30xFTgOzOAQ7kNvwFH3QzL&_nc_oc=Adn3W9VZculBierHfF_7R9PXKhMHZO-D7bUAaFGTVHse2XhAt5wxukHQp8Xv4uNf37E&_nc_zt=23&_nc_ht=scontent.ftpe7-4.fna&_nc_gid=84_HD62j0UJn3n4ZfCvQag&oh=00_AfnlBt8VQKebztsfOVifzYuVG2fpMKjXYeI7WkY6yT1H1g&oe=69547C8B";
 
@@ -68,6 +81,12 @@
         );
         const IconDownload = () => (
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        );
+        const IconLoading = () => (
+            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
         );
         
         // --- 主程式 ---
@@ -88,6 +107,7 @@
 
             const [generatedSheets, setGeneratedSheets] = useState([]);
             const [logoUrl, setLogoUrl] = useState(DEFAULT_LOGO_URL);
+            const [isGenerating, setIsGenerating] = useState(false);
 
             // 難度設定對應表
             const difficultySettings = {
@@ -194,10 +214,34 @@
                 window.print();
             };
 
-            // 處理下載 PDF
+            // 處理直接下載 PDF
             const handleDownloadPDF = () => {
-                alert("💡 下載教學：\n\n網頁會開啟列印視窗，請在「目的地」或「印表機」選單中，選擇『另存為 PDF』即可將檔案下載到電腦中！");
-                window.print();
+                if (isGenerating) return;
+                
+                setIsGenerating(true);
+                
+                // 延遲一點點讓 UI 更新，再執行 PDF 產生
+                setTimeout(() => {
+                    const element = document.getElementById('printable-area');
+                    const opt = {
+                        margin:       0,
+                        filename:     `樂齡數學題目_${new Date().toISOString().split('T')[0]}.pdf`,
+                        image:        { type: 'jpeg', quality: 0.98 },
+                        html2canvas:  { scale: 2, useCORS: true, scrollY: 0 },
+                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+                    };
+
+                    html2pdf().set(opt).from(element).save()
+                        .then(() => {
+                            setIsGenerating(false);
+                        })
+                        .catch((err) => {
+                            console.error(err);
+                            alert("PDF 產生失敗，可能是圖片跨域問題。請嘗試上傳自訂 Logo，或使用「列印題目」功能並選擇「另存為 PDF」。");
+                            setIsGenerating(false);
+                        });
+                }, 200); // 增加延遲時間確保渲染完成
             };
 
             // 難度變更處理
@@ -218,25 +262,31 @@
             return (
                 <div className="min-h-screen flex flex-col">
                     {/* --- 控制面板 (列印時隱藏) --- */}
-                    <div className="no-print bg-white shadow-md p-6 sticky top-0 z-10">
+                    <div className="no-print bg-white shadow-md p-6 sticky top-0 z-20">
                         <div className="max-w-6xl mx-auto">
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                                 <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-3">
                                     {/* Logo 在網頁標題 */}
-                                    <img src={logoUrl} alt="Logo" className="h-10 object-contain max-w-[150px]" />
+                                    <img 
+                                        src={logoUrl} 
+                                        alt="Logo" 
+                                        className="h-10 object-contain max-w-[150px]"
+                                        onError={(e) => { e.target.style.display = 'none'; }} 
+                                    />
                                     樂齡腦力激盪 - 數學題目產生器
                                 </h1>
-                                <div className="flex gap-2">
+                                <div className="flex gap-2 w-full md:w-auto">
                                      <button 
                                         onClick={handleDownloadPDF}
-                                        className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all"
+                                        disabled={isGenerating}
+                                        className={`flex-1 md:flex-none justify-center bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all ${isGenerating ? 'opacity-70 cursor-not-allowed' : ''}`}
                                     >
-                                        <IconDownload />
-                                        下載 PDF
+                                        {isGenerating ? <IconLoading /> : <IconDownload />}
+                                        {isGenerating ? '產生中...' : '下載 PDF'}
                                     </button>
                                     <button 
                                         onClick={handlePrint}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all"
+                                        className="flex-1 md:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all"
                                     >
                                         <IconPrinter />
                                         列印題目
@@ -343,104 +393,116 @@
                                     </button>
                                 </div>
                             </div>
-                            <p className="mt-4 text-sm text-gray-500 bg-blue-50 p-2 rounded inline-block">
+                            <p className="mt-4 text-sm text-gray-500 bg-blue-50 p-2 rounded inline-block md:block hidden">
                                 💡 提示：點擊「下載 PDF」後，在目的地選擇「另存為 PDF」即可儲存檔案。
+                            </p>
+                             <p className="mt-4 text-sm text-gray-500 bg-blue-50 p-2 rounded block md:hidden">
+                                💡 手機版提示：左右滑動下方預覽區可查看完整 A4 頁面。
                             </p>
                         </div>
                     </div>
 
-                    {/* --- 列印區域 --- */}
-                    <div id="printable-area" className="flex-grow p-8 mx-auto max-w-[210mm] print:p-0 print:max-w-none">
-                        
-                        {/* 遍歷每一份試卷 */}
-                        {generatedSheets.map((sheet, sIndex) => (
-                            <React.Fragment key={sheet.id}>
-                                
-                                {/* 題目卷 */}
-                                <div className="bg-white shadow-xl print:shadow-none p-10 min-h-[297mm] mb-8 print:mb-0 relative break-after-page mx-auto w-full box-border">
+                    {/* --- 列印區域 (外層增加捲動) --- */}
+                    <div className="flex-grow w-full overflow-x-auto bg-gray-200/50 p-4 md:p-8 print-reset-width">
+                        <div 
+                            id="printable-area" 
+                            className={`mx-auto w-[210mm] print:w-full print:max-w-none bg-transparent ${isGenerating ? 'p-0' : 'flex flex-col gap-8'}`}
+                        >
+                            
+                            {/* 遍歷每一份試卷 */}
+                            {generatedSheets.map((sheet, sIndex) => (
+                                <React.Fragment key={sheet.id}>
                                     
-                                    {/* 📌 修改重點：Logo 移至上方中央，並縮小至 h-14 (約原本的 90%) */}
-                                    <img 
-                                        src={logoUrl} 
-                                        alt="Logo" 
-                                        className="absolute top-5 left-1/2 -translate-x-1/2 h-14 object-contain max-w-[200px]" 
-                                    />
-
-                                    {/* 頁首：移除 mt-10，恢復原本排版 */}
-                                    <div className="border-b-2 border-gray-800 pb-4 mb-8 flex justify-between items-end">
-                                        <div>
-                                            <h2 className="text-3xl font-bold text-gray-900 mb-2">每日腦力體操</h2>
-                                            <p className="text-lg text-gray-600">難度：{difficultySettings[config.difficulty].label.split(' ')[0]} | 試卷編號：{sheet.id}</p>
-                                        </div>
-                                        <div className="text-right flex flex-col items-end">
-                                            <div className="text-xl mb-1">姓名：________________</div>
-                                            <div className="text-lg text-gray-500">日期：{sheet.date} | 分數：________</div>
-                                        </div>
-                                    </div>
-
-                                    {/* 題目網格 */}
-                                    <div className="grid grid-cols-2 gap-x-12 gap-y-12">
-                                        {sheet.problems.map((prob, pIndex) => (
-                                            <div key={pIndex} className="flex items-center text-3xl font-mono border-b border-gray-300 pb-2">
-                                                <span className="w-8 text-gray-400 text-xl font-sans mr-2">{pIndex + 1}.</span>
-                                                <div className="flex-1 flex justify-between items-center px-4 font-semibold text-gray-800">
-                                                    <span className="w-16 text-right">{prob.num1}</span>
-                                                    <span className="mx-4">{prob.symbol}</span>
-                                                    <span className="w-16 text-left">{prob.num2}</span>
-                                                    <span className="mx-2">=</span>
-                                                    <span className="flex-1"></span> {/* 空白讓長輩填寫 */}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* 頁尾 */}
-                                    <div className="absolute bottom-10 left-0 w-full text-center text-gray-400 text-sm">
-                                        保持心情愉快，動動腦更有活力！ | 第 {sIndex + 1} 份，共 {config.numberOfSets} 份
-                                    </div>
-                                </div>
-
-                                {/* 答案卷 (如果有的話) */}
-                                {config.includeAnswers && (
-                                    <div className="bg-white shadow-xl print:shadow-none p-10 min-h-[297mm] mb-8 print:mb-0 relative break-after-page mx-auto w-full box-border">
+                                    {/* 題目卷 */}
+                                    <div className={`bg-white p-10 relative box-border break-after-page mx-auto w-full ${isGenerating ? 'shadow-none h-[296mm]' : 'shadow-xl min-h-[296mm]'}`}>
                                         
-                                        {/* 📌 解答頁 Logo 也比照辦理 */}
+                                        {/* 📌 修改重點：Logo 移至上方中央，並縮小至 h-14 (約原本的 90%) */}
                                         <img 
                                             src={logoUrl} 
                                             alt="Logo" 
+                                            crossOrigin="anonymous"
+                                            onError={(e) => { e.target.style.display = 'none'; }}
                                             className="absolute top-5 left-1/2 -translate-x-1/2 h-14 object-contain max-w-[200px]" 
                                         />
 
-                                        {/* 答案卷頁首：移除 mt-10 */}
-                                        <div className="border-b-2 border-gray-400 pb-2 mb-6 flex justify-between items-end">
+                                        {/* 頁首：移除 mt-10，恢復原本排版 */}
+                                        <div className="border-b-2 border-gray-800 pb-4 mb-8 flex justify-between items-end">
                                             <div>
-                                                <h2 className="text-2xl font-bold text-gray-700">參考解答</h2>
-                                                <p className="text-gray-500">試卷編號：{sheet.id}</p>
+                                                <h2 className="text-3xl font-bold text-gray-900 mb-2">每日腦力體操</h2>
+                                                <p className="text-lg text-gray-600">難度：{difficultySettings[config.difficulty].label.split(' ')[0]} | 試卷編號：{sheet.id}</p>
+                                            </div>
+                                            <div className="text-right flex flex-col items-end">
+                                                <div className="text-xl mb-1">姓名：________________</div>
+                                                <div className="text-lg text-gray-500">日期：{sheet.date} | 分數：________</div>
                                             </div>
                                         </div>
 
-                                        {/* 答案網格 (比較密集) */}
-                                        <div className="grid grid-cols-4 gap-6">
+                                        {/* 題目網格 */}
+                                        <div className="grid grid-cols-2 gap-x-12 gap-y-12">
                                             {sheet.problems.map((prob, pIndex) => (
-                                                <div key={pIndex} className="border border-gray-200 p-3 rounded bg-gray-50 flex flex-col items-center">
-                                                    <span className="text-xs text-gray-400 mb-1">第 {pIndex + 1} 題</span>
-                                                    <div className="text-lg font-mono text-gray-600">
-                                                        {prob.num1} {prob.symbol} {prob.num2}
-                                                    </div>
-                                                    <div className="text-2xl font-bold text-red-600 mt-1">
-                                                        = {prob.answer}
+                                                <div key={pIndex} className="flex items-center text-3xl font-mono border-b border-gray-300 pb-2">
+                                                    <span className="w-8 text-gray-400 text-xl font-sans mr-2">{pIndex + 1}.</span>
+                                                    <div className="flex-1 flex justify-between items-center px-4 font-semibold text-gray-800">
+                                                        <span className="w-16 text-right">{prob.num1}</span>
+                                                        <span className="mx-4">{prob.symbol}</span>
+                                                        <span className="w-16 text-left">{prob.num2}</span>
+                                                        <span className="mx-2">=</span>
+                                                        <span className="flex-1"></span> {/* 空白讓長輩填寫 */}
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
-                                         <div className="absolute bottom-10 left-0 w-full text-center text-gray-400 text-sm">
-                                            解答頁 - 請在完成後再核對哦！
+
+                                        {/* 頁尾 */}
+                                        <div className="absolute bottom-10 left-0 w-full text-center text-gray-400 text-sm">
+                                            保持心情愉快，動動腦更有活力！ | 第 {sIndex + 1} 份，共 {config.numberOfSets} 份
                                         </div>
                                     </div>
-                                )}
 
-                            </React.Fragment>
-                        ))}
+                                    {/* 答案卷 (如果有的話) */}
+                                    {config.includeAnswers && (
+                                        <div className={`bg-white p-10 relative box-border break-after-page mx-auto w-full ${isGenerating ? 'shadow-none h-[296mm]' : 'shadow-xl min-h-[296mm]'}`}>
+                                            
+                                            {/* 📌 解答頁 Logo 也比照辦理 */}
+                                            <img 
+                                                src={logoUrl} 
+                                                alt="Logo" 
+                                                crossOrigin="anonymous"
+                                                onError={(e) => { e.target.style.display = 'none'; }}
+                                                className="absolute top-5 left-1/2 -translate-x-1/2 h-14 object-contain max-w-[200px]" 
+                                            />
+
+                                            {/* 答案卷頁首：移除 mt-10 */}
+                                            <div className="border-b-2 border-gray-400 pb-2 mb-6 flex justify-between items-end">
+                                                <div>
+                                                    <h2 className="text-2xl font-bold text-gray-700">參考解答</h2>
+                                                    <p className="text-gray-500">試卷編號：{sheet.id}</p>
+                                                </div>
+                                            </div>
+
+                                            {/* 答案網格 (比較密集) */}
+                                            <div className="grid grid-cols-4 gap-6">
+                                                {sheet.problems.map((prob, pIndex) => (
+                                                    <div key={pIndex} className="border border-gray-200 p-3 rounded bg-gray-50 flex flex-col items-center">
+                                                        <span className="text-xs text-gray-400 mb-1">第 {pIndex + 1} 題</span>
+                                                        <div className="text-lg font-mono text-gray-600">
+                                                            {prob.num1} {prob.symbol} {prob.num2}
+                                                        </div>
+                                                        <div className="text-2xl font-bold text-red-600 mt-1">
+                                                            = {prob.answer}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                             <div className="absolute bottom-10 left-0 w-full text-center text-gray-400 text-sm">
+                                                解答頁 - 請在完成後再核對哦！
+                                            </div>
+                                        </div>
+                                    )}
+
+                                </React.Fragment>
+                            ))}
+                        </div>
                     </div>
 
                     {/* --- 頁尾 (設計者資訊) - 列印時隱藏 --- */}
