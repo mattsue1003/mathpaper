@@ -97,7 +97,12 @@
         .pdf-btn:hover { background: #f39c12; }
 
         /* --- A4 紙張預覽樣式 --- */
-        .page-container { width: 210mm; margin: 0 auto; }
+        .page-container { 
+            width: 210mm; 
+            margin: 0 auto; 
+            /* 在手機上若畫面不夠寬，允許水平捲動，但不影響 PDF 生成 */
+            overflow-x: auto; 
+        }
         
         .sheet {
             background: white; 
@@ -109,15 +114,29 @@
             box-shadow: 0 0 15px rgba(0,0,0,0.15); 
             display: flex; 
             flex-direction: column; 
-            position: relative; /* 讓絕對定位的 Logo 參考此容器 */
-            overflow: hidden; /* 避免 Logo 超出紙張 */
+            position: relative; 
+            overflow: hidden; 
+            /* 關鍵：防止手機瀏覽器因為容器過寬而擠壓內容 */
+            min-width: 210mm; 
         }
 
         /* 專門為了 html2pdf 生成時使用的樣式，消除陰影和間距 */
+        body.generating-pdf {
+            /* 轉檔時強制寬度，防止手機版面跑掉 */
+            width: 210mm !important;
+            overflow: hidden !important;
+        }
+
+        body.generating-pdf .page-container {
+            width: 210mm !important;
+            margin: 0 !important;
+            overflow: visible !important;
+        }
+
         body.generating-pdf .sheet {
             box-shadow: none;
-            margin-bottom: 0;
-            margin-top: 0;
+            margin: 0;
+            /* 確保轉檔時不會有邊距干擾 */
         }
 
         /* Logo 樣式 */
@@ -125,8 +144,8 @@
             position: absolute;
             top: 15mm;
             left: 15mm;
-            z-index: 10; /* 確保在最上層 */
-            max-width: 300px; /* 限制最大寬度以免失控 */
+            z-index: 10; 
+            max-width: 300px; 
             object-fit: contain;
         }
         
@@ -135,7 +154,7 @@
             padding-bottom: 5px; 
             margin-bottom: 10px; 
             position: relative;
-            z-index: 1; /* 內容層級 */
+            z-index: 1; 
         }
         
         .sheet-title { 
@@ -226,7 +245,6 @@
             .page-container { width: 100%; margin: 0; }
             .answer-box { border: 2px solid #333 !important; }
             .answer-filled { border-color: #d32f2f !important; color: #d32f2f !important; }
-            /* 確保列印時 Logo 會出現 */
             .sheet-logo { display: block !important; } 
         }
     </style>
@@ -325,7 +343,7 @@
         }
     });
 
-    // 即時更新 Logo 大小 (不需要重新生成)
+    // 即時更新 Logo 大小
     function updateLogoSize() {
         const size = document.getElementById('logoSize').value;
         const logos = document.querySelectorAll('.sheet-logo');
@@ -350,7 +368,6 @@
             selectedOp = 'mul';
         }
 
-        // --- 產生數字邏輯 ---
         if (selectedOp === 'mul') {
             n1 = getRandomInt(2, 9);
             n2 = getRandomInt(2, 9);
@@ -394,7 +411,6 @@
             }
         }
 
-        // --- 處理題型顯示 ---
         let displayType = 0; 
         if (mode === 'fill') displayType = 1;
         if (mode === 'mix_mode') displayType = Math.random() > 0.6 ? 1 : 0;
@@ -430,7 +446,6 @@
         container.innerHTML = ''; 
         let allAnswerSheets = [];
 
-        // --- 固定 20 題設定 ---
         let problemsPerPage = 20; 
         let fontSize = '26pt'; 
 
@@ -462,7 +477,6 @@
         const div = document.createElement('div');
         div.className = 'sheet';
         
-        // 生成 Logo HTML
         let logoHtml = '';
         if (currentLogoData) {
             logoHtml = `<img src="${currentLogoData}" class="sheet-logo" style="width: ${logoSize}px" alt="Logo">`;
@@ -499,32 +513,34 @@
         return div;
     }
 
-    // --- 新增：處理 PDF 下載的函式 ---
+    // --- 修正版 PDF 下載函式 ---
     function downloadPDF() {
         const element = document.getElementById('outputArea');
         const btn = document.getElementById('pdfBtn');
         const originalText = btn.innerText;
         const title = document.getElementById('titleInput').value;
         
-        // 變更按鈕狀態
         btn.innerText = "⏳ 處理中...請稍候";
         btn.disabled = true;
         
-        // 加上特殊 class 以修正轉檔時的樣式 (去除陰影等)
         document.body.classList.add('generating-pdf');
 
         const opt = {
-            margin:       0, // 邊距設為0，因為 .sheet 已經設定好 padding
+            margin:       0, 
             filename:     title + '.pdf',
             image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true }, // scale: 2 讓字體更清晰
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            // pagebreak: { mode: 'css', after: '.sheet' } // 確保每一張考卷分頁
+            // 關鍵修正：設定 windowWidth，騙過 html2canvas 讓它以為螢幕很寬
+            html2canvas:  { 
+                scale: 2, 
+                useCORS: true, 
+                scrollX: 0, 
+                scrollY: 0,
+                windowWidth: 1200 // 強制設定虛擬視窗寬度
+            },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
-        // 執行轉換
         html2pdf().set(opt).from(element).save().then(() => {
-            // 恢復按鈕狀態
             btn.innerText = originalText;
             btn.disabled = false;
             document.body.classList.remove('generating-pdf');
