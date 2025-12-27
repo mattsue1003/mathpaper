@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>樂齡大腦體操 - 題目產生器 Pro (20題版)</title>
     
-    <!-- 引入 html2pdf 函式庫，用於直接下載 PDF -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- 改用 html2canvas 和 jsPDF 獨立函式庫，實現「先轉圖、再轉PDF」的穩定流程 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <style>
         /* --- 基礎設定 --- */
@@ -118,6 +119,8 @@
             overflow: hidden; 
             /* 確保最小寬度，防止手機預覽時內容擠壓 */
             min-width: 210mm; 
+            /* 確保背景色是白色，轉圖才不會變透明 */
+            background-color: #ffffff;
         }
 
         /* Logo 樣式 */
@@ -217,15 +220,6 @@
             z-index: 1;
         }
 
-        /* --- PDF轉檔專用樣式 (透過JS動態添加) --- */
-        .pdf-export-mode .sheet {
-            box-shadow: none !important;
-            margin-bottom: 0 !important;
-            margin-top: 0 !important;
-            /* 強制頁面斷點 */
-            page-break-after: always;
-        }
-
         /* --- 列印專用樣式 --- */
         @media print {
             @page { margin: 0; size: A4 portrait; } 
@@ -308,7 +302,7 @@
     <div class="btn-group">
         <button class="gen-btn" onclick="generateSheets()">✨ 重新生成題目</button>
         <button class="print-btn" onclick="window.print()">🖨️ 列印 / 電腦存 PDF</button>
-        <button class="pdf-btn" id="pdfBtn" onclick="downloadPDF()">📱 下載 PDF (手機用)</button>
+        <button class="pdf-btn" id="pdfBtn" onclick="downloadPDF()">📱 下載 PDF (手機完美版)</button>
     </div>
 </div>
 
@@ -327,13 +321,12 @@
             const reader = new FileReader();
             reader.onload = function(event) {
                 currentLogoData = event.target.result;
-                generateSheets(); // 上傳後重新生成以顯示 Logo
+                generateSheets(); 
             };
             reader.readAsDataURL(file);
         }
     });
 
-    // 即時更新 Logo 大小
     function updateLogoSize() {
         const size = document.getElementById('logoSize').value;
         const logos = document.querySelectorAll('.sheet-logo');
@@ -467,7 +460,6 @@
         const div = document.createElement('div');
         div.className = 'sheet';
         
-        // 生成 Logo HTML
         let logoHtml = '';
         if (currentLogoData) {
             logoHtml = `<img src="${currentLogoData}" class="sheet-logo" style="width: ${logoSize}px" alt="Logo">`;
@@ -504,60 +496,78 @@
         return div;
     }
 
-    // --- 終極修正版：背景複製轉檔函式 ---
-    // 不會干擾目前畫面，且強制 A4 寬度，解決手機裁切與跳頁問題
-    function downloadPDF() {
-        const element = document.getElementById('outputArea');
+    // --- 終極修正版：圖片合成 PDF 法 ---
+    // 依序將每一頁「拍照」成圖片，再貼到 PDF 上，實現 100% 所見即所得
+    async function downloadPDF() {
+        const { jsPDF } = window.jspdf;
         const btn = document.getElementById('pdfBtn');
         const originalText = btn.innerText;
         const title = document.getElementById('titleInput').value;
+        const sheets = document.querySelectorAll('.sheet');
         
-        btn.innerText = "⏳ 處理中...請稍候";
         btn.disabled = true;
 
-        // 1. 建立一個專門用於轉檔的容器 (Off-screen Container)
-        const container = document.createElement('div');
-        // 強制設定寬度為 A4 寬度 (約 210mm)，避免手機螢幕寬度影響
-        container.style.width = '210mm'; 
-        container.style.position = 'absolute'; 
-        container.style.top = '-10000px'; 
-        container.style.left = '0px'; 
-        container.style.zIndex = '-1000';
-        // 加上特定 class 以便 CSS 強制移除陰影和邊距
-        container.classList.add('pdf-export-mode');
+        try {
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = 210;
+            const pageHeight = 297;
 
-        // 2. 複製內容到容器中
-        const clone = element.cloneNode(true);
-        container.appendChild(clone);
-        document.body.appendChild(container);
+            for (let i = 0; i < sheets.length; i++) {
+                // 更新按鈕進度
+                btn.innerText = `⏳ 處理第 ${i + 1} / ${sheets.length} 頁...`;
 
-        // 3. 設定 html2pdf 參數
-        const opt = {
-            margin:       0, // 重要：歸零邊距，避免內容被推擠
-            filename:     title + '.pdf',
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { 
-                scale: 2,       // 高解析度
-                useCORS: true,  // 跨域圖片支援
-                scrollY: 0,     // 鎖定頂部
-                scrollX: 0,
-                windowWidth: 800 // 騙過瀏覽器，假裝視窗有 800px 寬
-            },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
+                const sheet = sheets[i];
 
-        // 4. 對「複製品」進行轉檔，完成後移除
-        html2pdf().set(opt).from(clone).save().then(() => {
-            document.body.removeChild(container);
-            btn.innerText = originalText;
-            btn.disabled = false;
-        }).catch(err => {
+                // 1. 複製節點到固定容器，強制桌面寬度 (1600px)
+                // 這樣 html2canvas 就會認為是在大螢幕上渲染
+                const clone = sheet.cloneNode(true);
+                clone.style.width = '210mm';
+                clone.style.height = '297mm';
+                clone.style.position = 'fixed';
+                clone.style.top = '0';
+                clone.style.left = '0';
+                clone.style.zIndex = '-9999';
+                clone.style.margin = '0';
+                clone.style.transform = 'none'; // 移除任何縮放
+                
+                document.body.appendChild(clone);
+
+                // 2. 使用 html2canvas 截圖
+                // windowWidth: 1600 是關鍵，欺騙瀏覽器這是桌面版
+                const canvas = await html2canvas(clone, {
+                    scale: 2, // 2倍解析度，確保清晰
+                    useCORS: true,
+                    windowWidth: 1600, 
+                    width: 794, // A4 在 96DPI 下約 794px
+                    height: 1123,
+                    scrollY: 0,
+                    scrollX: 0
+                });
+
+                // 3. 移除複製節點
+                document.body.removeChild(clone);
+
+                // 4. 將 Canvas 轉為圖片數據
+                const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+                // 5. 將圖片貼到 PDF
+                if (i > 0) {
+                    pdf.addPage();
+                }
+                pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+            }
+
+            // 6. 存檔
+            btn.innerText = "💾 正在儲存...";
+            pdf.save(title + '.pdf');
+
+        } catch (err) {
             console.error(err);
-            if (document.body.contains(container)) document.body.removeChild(container);
+            alert("轉檔失敗，請重新整理網頁後再試一次，或改用電腦操作。");
+        } finally {
             btn.innerText = originalText;
             btn.disabled = false;
-            alert("轉檔發生錯誤，建議使用電腦操作");
-        });
+        }
     }
 
     window.onload = generateSheets;
